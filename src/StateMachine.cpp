@@ -18,7 +18,7 @@ bool liftoffDetection(StateMachine_state_t state, IMU_data_t imu, bool DEBUG_OUT
     return false;
   }
   
-  if(imu.az - 9.81 >= StateMachine_data_d.lDT * 9.81f)
+  if(imu.ay - 9.81 >= StateMachine_data_d.lDT * 9.81f)
   {
     if(DEBUG_OUTPUT){
       Serial.println("Launch detected!");
@@ -35,7 +35,7 @@ bool burnoutDetection(StateMachine_state_t state, IMU_data_t imu, bool DEBUG_OUT
     return false;
   }
 
-  if(imu.az < 0.0f){
+  if(imu.ay < 0.0f){
     return true;
   }
   

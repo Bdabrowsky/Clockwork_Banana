@@ -1,6 +1,8 @@
 #pragma once
  
 #include "IMU.h"
+#include "StateMachine.h"
+
 
 typedef struct {
     float beta;  
@@ -30,6 +32,6 @@ typedef struct {
 
 
 void initAHRS(float pitchOffset, float yawOffset,float rollOffset, float gyroMeasError);
-AHRS_orientation_t getPosition(int state, float deltaT, IMU_data_t imu);
+AHRS_orientation_t getPosition(StateMachine_state_t state, float deltaT, IMU_data_t imu);
    
 

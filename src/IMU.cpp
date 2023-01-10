@@ -22,16 +22,16 @@ IMU_data_t getRawReadings()
 
 
     //High pass filter
-    if(IMU_data_d.gx <= 0.02 && IMU_data_d.gx >= -0.02){
-      //IMU_data_d.gx = 0.0f;
+    if(IMU_data_d.gx <= 0.03 && IMU_data_d.gx >= -0.03){
+      IMU_data_d.gx = 0.0f;
     }
 
-    if(IMU_data_d.gy <= 0.02 && IMU_data_d.gy >= -0.02){
-      //IMU_data_d.gy = 0.0f;
+    if(IMU_data_d.gy <= 0.03 && IMU_data_d.gy >= -0.03){
+      IMU_data_d.gy = 0.0f;
     }
 
-    if(IMU_data_d.gz <= 0.02 && IMU_data_d.gz >= -0.02){
-      //IMU_data_d.gz = 0.0f;
+    if(IMU_data_d.gz <= 0.03 && IMU_data_d.gz >= -0.03){
+      IMU_data_d.gz = 0.0f;
     }
 
     

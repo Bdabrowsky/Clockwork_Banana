@@ -1,5 +1,6 @@
 #include<Arduino.h>
 #include <Wire.h>
+#include <String.h>
 
 #include "AHRS.h"
 #include "Baro.h"
@@ -28,10 +29,10 @@ float           desiredYaw=                             0;
 float           desiredRoll=                            0;
 
 //Gyroscope settings
-const int             gyroCalibrationSampleCount=       500;                        //Amount of samples taken for gyroscope calibration. 1000 is about 5-10 seconds of calibration
+const int             gyroCalibrationSampleCount=       700;                        //Amount of samples taken for gyroscope calibration. 1000 is about 5-10 seconds of calibration
 const float           gyroMeasError=                    20.0f;  
 
-const float           pitchOffset=                      0;                          //Offsets of rocket and IMU orientations in deg
+const float           pitchOffset=                      90.0f;                          //Offsets of rocket and IMU orientations in deg
 const float           yawOffset=                        0;
 const float           rollOffset=                       0;    
 
@@ -73,7 +74,7 @@ StateMachine_state_t StateMachine_state;
 unsigned long prevTMain,lastUpdate,prevTLog,prevTBuzz;
 unsigned long timestamp;
 
-char packet[2000];
+String packet;
 int logCounter = 0;
 
 unsigned long prevTDebug;
@@ -100,11 +101,6 @@ void setup(){
         Serial.println("BMP280 init failed!");
     }
 
-    if(!initIMU(gyroCalibrationSampleCount, DEBUG_OUTPUT) && StateMachine_state == INITIALIZING){
-        StateMachine_state = CRITICAL_ERROR;
-        Serial.println("IMU init failed!");
-    }
-
     if(!SD_init(SDPin, DEBUG_OUTPUT) && StateMachine_state == INITIALIZING){
         StateMachine_state = CRITICAL_ERROR;
         Serial.println("SD init failed!");
@@ -115,6 +111,10 @@ void setup(){
     Servo_init(S1Pin, S2Pin, S3Pin, S4Pin);
     initStateMachine(launchDetectionTreshold, freefallAccelerationTreshold, apogeeDetectionTreshold, touchdownDetectionTreshold, railHeight);
 
+    if(!initIMU(gyroCalibrationSampleCount, DEBUG_OUTPUT) && StateMachine_state == INITIALIZING){
+        StateMachine_state = CRITICAL_ERROR;
+        Serial.println("IMU init failed!");
+    }
 
     if(StateMachine_state != CRITICAL_ERROR){
         StateMachine_state = GROUND_IDLE;
@@ -125,20 +125,22 @@ void setup(){
 
 void loop(){
     
-    IMU_data = getRawReadings();
-    timestamp = micros(); //Get new microsecond timestamp for this loop
-    unsigned long deltaT = timestamp - lastUpdate; 
-    lastUpdate = timestamp;
-
-    AHRS_orientation = getPosition(1, deltaT, IMU_data);
+   
 
     if( (micros()-prevTMain) >= (1000000./mainLoopFREQ) ){
         prevTMain=micros();
         
-       
+        IMU_data = getRawReadings();
         BMP_data = getAltitude();
+        
 
-       
+      
+        timestamp = micros(); //Get new microsecond timestamp for this loop
+        unsigned long deltaT = timestamp - lastUpdate; 
+        lastUpdate = timestamp;
+
+        AHRS_orientation = getPosition(StateMachine_state, deltaT, IMU_data);
+        Serial.println(deltaT/1000);
 
         //Guidance
         if(StateMachine_state == POWERED_ASCENT || StateMachine_state == COAST){
@@ -189,27 +191,22 @@ void loop(){
     if( (micros()-prevTLog) >= (1000000./dataLoggingFREQ) && StateMachine_state != TOUCHDOWN){
         prevTLog = micros();
 
-        char frame[200];
-        sprintf(frame, "%ld,%d,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f\n", 
-        micros(), 
-        1, 
-        IMU_data.ax, 
-        IMU_data.ay, 
-        IMU_data.az, 
-        IMU_data.gx, 
-        IMU_data.gy, 
-        IMU_data.gz,
-        BMP_data.altitude, 
-        AHRS_orientation.pitch,  
-        AHRS_orientation.yaw,  
-        AHRS_orientation.roll);
+        String frame;
+        frame = String(micros()) + String(",") + String(StateMachine_state) + String(",") 
+        + String(IMU_data.ax) + String(",") + String(IMU_data.ay) + String(",") + String(IMU_data.az) + String(",") 
+        + String(IMU_data.gx) + String(",") + String(IMU_data.gy) + String(",") + String(IMU_data.gz) + String(",") 
+        + String(BMP_data.pressure) + String(",") + String(BMP_data.altitude) + String(",") 
+        + String(AHRS_orientation.pitch) + String(",") + String(AHRS_orientation.yaw) + String(",") + String(AHRS_orientation.roll) + String(",")
+        + String(Guidance_data.desiredPitch) + String(",") + String(Guidance_data.desiredYaw) + String(",") + String(Guidance_data.desiredRoll) + String("\n");
 
-        strcat(packet,frame);
+
+
+        packet += frame;
 
         logCounter++;
-        if(logCounter >=10){
-            //SD_writeData(frame);
-            sprintf(packet, "");
+        if(logCounter >=50){
+            SD_writeData(packet);
+            packet = "";
             logCounter = 0;
         }
        //Serial.println(frame);
@@ -218,7 +215,7 @@ void loop(){
     if( (micros()-prevTDebug) >= (1000000./debugFREQ)){
         prevTDebug = micros();
         //Serial.print(IMU_data.gx);Serial.print(" ");Serial.print(IMU_data.gy);Serial.print(" ");Serial.println(IMU_data.gz);
-        Serial.print(AHRS_orientation.pitch);Serial.print(" ");Serial.print(AHRS_orientation.yaw);Serial.print(" ");Serial.println(AHRS_orientation.roll);
+        //Serial.print(AHRS_orientation.pitch);Serial.print(" ");Serial.print(AHRS_orientation.yaw);Serial.print(" ");Serial.println(AHRS_orientation.roll);
         //Serial.print(IMU_data.gx);Serial.print(" ");Serial.println(IMU_data.ax);
     }
 

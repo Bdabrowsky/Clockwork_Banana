@@ -1,17 +1,20 @@
 #include <Arduino.h> 
 #include "AHRS.h"
-#include "Orientation.h"
+
 
 void filterMagdwickUpdate(float w_x, float w_y, float w_z, float a_x,float a_y, float a_z, unsigned long deltaT, bool useAcc);
 void AHRS_integrateVelocity(float deltaT, float ax, float ay, float az);
 void AHRS_calculateRake();
-
+void MahonyAHRSupdateIMU(float gx, float gy, float gz, float ax, float ay, float az, unsigned long deltaT, bool useAcc);
+float invSqrt(float x);
 
 AHRS_orientation_t AHRS_orientation_d;
 AHRS_config_t AHRS_config_d;
 
-Orientation ori; // Main orientation measurement
-EulerAngles oriMeasure; 
+
+ float twoKp = (2.0f * 0.5f);											// 2 * proportional gain (Kp)
+ float twoKi = (2.0f * 0.005f);											// 2 * integral gain (Ki)
+ float integralFBx = 0.0f,  integralFBy = 0.0f, integralFBz = 0.0f;	// integral error terms scaled by Ki
 
 void initAHRS(float pitchOffset, float yawOffset, float rollOffset, float gyroMeasError)
 {
@@ -131,6 +134,79 @@ void filterMagdwickUpdate(float w_x, float w_y, float w_z, float a_x,float a_y, 
 
 }
 
+
+void MahonyAHRSupdateIMU(float gx, float gy, float gz, float ax, float ay, float az, unsigned long deltaT, bool useAcc) {
+	float recipNorm;
+	float halfvx, halfvy, halfvz;
+	float halfex, halfey, halfez;
+	float qa, qb, qc;
+
+    float dt = (float)(deltaT/1e6);
+	// Compute feedback only if accelerometer measurement valid (avoids NaN in accelerometer normalisation)
+	if(!((ax == 0.0f) && (ay == 0.0f) && (az == 0.0f)) && useAcc) {
+
+		// Normalise accelerometer measurement
+		recipNorm = invSqrt(ax * ax + ay * ay + az * az);
+		ax *= recipNorm;
+		ay *= recipNorm;
+		az *= recipNorm;        
+
+		// Estimated direction of gravity and vector perpendicular to magnetic flux
+		halfvx = AHRS_orientation_d.q2 * AHRS_orientation_d.q4 - AHRS_orientation_d.q1 * AHRS_orientation_d.q3;
+		halfvy = AHRS_orientation_d.q1 * AHRS_orientation_d.q2 + AHRS_orientation_d.q3 * AHRS_orientation_d.q4;
+		halfvz = AHRS_orientation_d.q1 * AHRS_orientation_d.q1 - 0.5f + AHRS_orientation_d.q4 * AHRS_orientation_d.q4;
+	
+		// Error is sum of cross product between estimated and measured direction of gravity
+		halfex = (ay * halfvz - az * halfvy);
+		halfey = (az * halfvx - ax * halfvz);
+		halfez = (ax * halfvy - ay * halfvx);
+
+		// Compute and apply integral feedback if enabled
+		if(twoKi > 0.0f) {
+			integralFBx += twoKi * halfex * dt;	// integral error scaled by Ki
+			integralFBy += twoKi * halfey * dt;
+			integralFBz += twoKi * halfez * dt;
+			gx += integralFBx;	// apply integral feedback
+			gy += integralFBy;
+			gz += integralFBz;
+		}
+		else {
+			integralFBx = 0.0f;	// prevent integral windup
+			integralFBy = 0.0f;
+			integralFBz = 0.0f;
+		}
+
+		// Apply proportional feedback
+		gx += twoKp * halfex;
+		gy += twoKp * halfey;
+		gz += twoKp * halfez;
+	}
+    
+   
+	// Integrate rate of change of quaternion
+	gx *= (0.5f * dt);		// pre-multiply common factors
+	gy *= (0.5f * dt);
+	gz *= (0.5f * dt);
+
+	qa = AHRS_orientation_d.q1;
+	qb = AHRS_orientation_d.q2;
+	qc = AHRS_orientation_d.q3;
+
+	AHRS_orientation_d.q1 += (-qb * gx - qc * gy - AHRS_orientation_d.q4 * gz);
+	AHRS_orientation_d.q2 += (qa * gx + qc * gz - AHRS_orientation_d.q4 * gy);
+	AHRS_orientation_d.q3 += (qa * gy - qb * gz + AHRS_orientation_d.q4 * gx);
+	AHRS_orientation_d.q4 += (qa * gz + qb * gy - qc * gx); 
+	
+	// Normalise quaternion
+	recipNorm = invSqrt(AHRS_orientation_d.q1 * AHRS_orientation_d.q1 + AHRS_orientation_d.q2 * AHRS_orientation_d.q2 + AHRS_orientation_d.q3 * AHRS_orientation_d.q3 + AHRS_orientation_d.q4 * AHRS_orientation_d.q4);
+	AHRS_orientation_d.q1 *= recipNorm;
+	AHRS_orientation_d.q2 *= recipNorm;
+	AHRS_orientation_d.q3 *= recipNorm;
+	AHRS_orientation_d.q4 *= recipNorm;
+}
+
+
+
 void AHRS_integrateVelocity(float deltaT, float ax, float ay, float az){
     AHRS_orientation_d.vx += ax * deltaT;
     AHRS_orientation_d.vy += ay * deltaT;
@@ -143,23 +219,25 @@ void AHRS_calculateRake(){
     AHRS_orientation_d.rake = acos(AHRS_orientation_d.vz / Vq);
 }
 
-AHRS_orientation_t getPosition(int state, float deltaT, IMU_data_t imu)
+AHRS_orientation_t getPosition(StateMachine_state_t state, float deltaT, IMU_data_t imu)
 {
    
-    filterMagdwickUpdate(imu.gx, imu.gy, imu.gz, imu.ax, imu.ay, imu.az, deltaT, 0);
     
-    //ori.update(imu.gx, imu.gy, imu.gz, deltaT / 1000000.0f); // '* DEG_TO_RAD' after all gyro functions if they return degrees/sec
-    //oriMeasure = ori.toEuler();
+    if(state == GROUND_IDLE){
+        filterMagdwickUpdate(imu.gx, imu.gy, imu.gz, imu.ax, imu.ay, imu.az, deltaT, 1);
+        //MahonyAHRSupdateIMU(imu.gx, imu.gy, imu.gz, imu.ax, imu.ay, imu.az, deltaT, 1);
+    }
+    else{
+        filterMagdwickUpdate(imu.gx, imu.gy, imu.gz, imu.ax, imu.ay, imu.az, deltaT, 0);
+        //MahonyAHRSupdateIMU(imu.gx, imu.gy, imu.gz, imu.ax, imu.ay, imu.az, deltaT, 0);
+    }
+   
     
-
-    AHRS_orientation_d.yaw   = atan2(2.0f * (AHRS_orientation_d.q2 * AHRS_orientation_d.q3 + AHRS_orientation_d.q1 * AHRS_orientation_d.q4), AHRS_orientation_d.q1 * AHRS_orientation_d.q1 + AHRS_orientation_d.q2 * AHRS_orientation_d.q2 - AHRS_orientation_d.q3 * AHRS_orientation_d.q3 - AHRS_orientation_d.q4 * AHRS_orientation_d.q4);   
-    AHRS_orientation_d.roll = -asin(2.0f * (AHRS_orientation_d.q2 * AHRS_orientation_d.q4 - AHRS_orientation_d.q1 * AHRS_orientation_d.q3));
+    AHRS_orientation_d.roll   = atan2(2.0f * (AHRS_orientation_d.q2 * AHRS_orientation_d.q3 + AHRS_orientation_d.q1 * AHRS_orientation_d.q4), AHRS_orientation_d.q1 * AHRS_orientation_d.q1 + AHRS_orientation_d.q2 * AHRS_orientation_d.q2 - AHRS_orientation_d.q3 * AHRS_orientation_d.q3 - AHRS_orientation_d.q4 * AHRS_orientation_d.q4);   
+    AHRS_orientation_d.yaw = -asin(2.0f * (AHRS_orientation_d.q2 * AHRS_orientation_d.q4 - AHRS_orientation_d.q1 * AHRS_orientation_d.q3));
     AHRS_orientation_d.pitch  = atan2(2.0f * (AHRS_orientation_d.q1 * AHRS_orientation_d.q2 + AHRS_orientation_d.q3 * AHRS_orientation_d.q4), AHRS_orientation_d.q1 * AHRS_orientation_d.q1 - AHRS_orientation_d.q2 * AHRS_orientation_d.q2 - AHRS_orientation_d.q3 * AHRS_orientation_d.q3 + AHRS_orientation_d.q4 * AHRS_orientation_d.q4);
 
-    //AHRS_orientation_d.roll = oriMeasure.pitch;
-    //AHRS_orientation_d.pitch = oriMeasure.yaw;
-    //AHRS_orientation_d.yaw = oriMeasure.roll;
-
+   
     float radToDeg=180.0f/PI;
     AHRS_orientation_d.pitch *= radToDeg;
     AHRS_orientation_d.roll *= radToDeg; 
@@ -167,10 +245,21 @@ AHRS_orientation_t getPosition(int state, float deltaT, IMU_data_t imu)
 
     
     AHRS_orientation_d.pitch -= AHRS_config_d.pitchOffset;
-    AHRS_orientation_d.yaw -= AHRS_config_d.yawOffset;
-    AHRS_orientation_d.roll -= AHRS_config_d.rollOffset;
+    AHRS_orientation_d.roll -= AHRS_config_d.yawOffset;
+    AHRS_orientation_d.yaw -= AHRS_config_d.rollOffset;
 
     //Serial.print(AHRS_orientation_d.pitch);Serial.print(" ");Serial.println(AHRS_orientation_d.yaw);
 
     return AHRS_orientation_d;
+}
+
+
+float invSqrt(float x) {
+	float halfx = 0.5f * x;
+	float y = x;
+	long i = *(long*)&y;
+	i = 0x5f3759df - (i>>1);
+	y = *(float*)&i;
+	y = y * (1.5f - (halfx * y * y));
+	return y;
 }

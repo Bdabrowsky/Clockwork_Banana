@@ -20,7 +20,7 @@ bool SD_init(int SdPin, bool DEBUG_OUTPUT){
         return false;
     }
 
-    meas.println("Timestamp,State,ACCx,ACCy,ACCz,GYROx,GYROy,GYROz,Altitude,MaxAltitude,Pitch,Yaw,Roll");
+    meas.println("Timestamp,State,ACCx,ACCy,ACCz,GYROx,GYROy,GYROz,Pressure,Altitude,Pitch,Yaw,Roll,SetPitch,SetYaw,SetRoll");
 
     if(DEBUG_OUTPUT){
         Serial.println("Found SD card!");
@@ -29,8 +29,11 @@ bool SD_init(int SdPin, bool DEBUG_OUTPUT){
     return true;
 }
 
-void SD_writeData(char *frame){
-    meas.println(frame);
+void SD_writeData(String frame){
+    meas = SD.open("LOG.csv", FILE_WRITE);
+    meas.print(frame);
+    meas.close();
+    //Serial.println(frame);
 }
 
 void SD_close(){
