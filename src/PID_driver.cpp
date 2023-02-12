@@ -57,6 +57,23 @@ Guidance_data_t PID_compute(AHRS_orientation_t ahrs, Guidance_data_t guidance, f
     pidY = pidY_P + pidY_I + pidY_D;
 
 
+    //Anti integral windup -> works only if P and D terma are less than saturation line
+    if(abs(pidX) > PID_config_d.maxAngleX){
+        if(abs(pidX_P + pidX_D) <= PID_config_d.maxAngleX){
+            float diff = PID_config_d.maxAngleX - abs(pidX_P + pidX_D);
+
+            if(pidX > 0){
+                pidX -= diff;   //angle positive -> subtract winded up integral part to jus hit saturation line
+            }
+            else{
+                 pidX += diff;  //angle positive -> add winded up integral part to jus hit saturation line
+            }
+        }
+    }
+
+
+
+
     //Saturation filter
     if(pidX > PID_config_d.maxAngleX){
         pidX = PID_config_d.maxAngleX;
@@ -73,7 +90,7 @@ Guidance_data_t PID_compute(AHRS_orientation_t ahrs, Guidance_data_t guidance, f
     if(pidY > (-1) * PID_config_d.maxAngleY){
         pidY = (-1) * PID_config_d.maxAngleY;
     }
-    
+
 
     result.servoValueX = pidX;
     result.servoValueY = pidY;
