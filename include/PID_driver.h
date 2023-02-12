@@ -23,9 +23,14 @@ typedef struct {
     float previousErrorY;
     float previousErrorZ;
 
+    float sumErrorX;
+    float sumErrorY;
+    float sumErrorZ;
+
     float errorX;
     float errorY;
     float errorZ;
+
     
     
 } PID_data_t;

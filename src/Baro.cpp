@@ -53,9 +53,9 @@ bool initBaro(bool DEBUG_OUTPUT)
     /* Default settings from the datasheet. */
     bmp.setSampling(Adafruit_BMP280::MODE_NORMAL,     /* Operating Mode. */
     Adafruit_BMP280::SAMPLING_X2,     /* Temp. oversampling */
-    Adafruit_BMP280::SAMPLING_X16,    /* Pressure oversampling */
-    Adafruit_BMP280::FILTER_X16,      /* Filtering. */
-    Adafruit_BMP280::STANDBY_MS_500); /* Standby time. */
+    Adafruit_BMP280::SAMPLING_X8,    /* Pressure oversampling */
+    Adafruit_BMP280::FILTER_X8,      /* Filtering. */
+    Adafruit_BMP280::STANDBY_MS_125); /* Standby time. */
 
     return true;
 

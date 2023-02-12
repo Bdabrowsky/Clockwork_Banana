@@ -16,7 +16,7 @@ void Servo_init(int S1Pin, int S2Pin, int S3Pin, int S4Pin){
     S4.attach(S4Pin);
     
 
-    //Test sequence
+    //Zero servos
     S1.write(90);
     S2.write(90);   
     S3.write(90);
@@ -26,8 +26,8 @@ void Servo_init(int S1Pin, int S2Pin, int S3Pin, int S4Pin){
 
 
 void Servo_execute(float servoValueS1, float servoValueS2, float servoValueS3, float servoValueS4){
-    S1.write(servoValueS1);
-    S2.write(servoValueS2);   
-    S3.write(servoValueS3);
-    S4.write(servoValueS4);  
+    S1.write(90 + servoValueS1);
+    S2.write(90 + servoValueS2);   
+    S3.write(90 - servoValueS3);
+    S4.write(90 - servoValueS4);  
 }

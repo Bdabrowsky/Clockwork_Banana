@@ -14,11 +14,12 @@
 
 //Board config
 const int buzzerPin=                                    4;                          //Buzzer attachment pin
-const int SDPin=                                        9;
-const int S1Pin=                                        5;
-const int S2Pin=                                        6;
-const int S3Pin=                                        7;
-const int S4Pin=                                        8;
+const int SDPin=                                        9;                          //SD cs pin
+
+const int S1Pin=                                        5;                          //Servo pins
+const int S2Pin=                                        6;                          //Servo pins  
+const int S3Pin=                                        7;                          //Servo pins
+const int S4Pin=                                        8;                          //Servo pins
 
 //Tuning parameters, DO NOT TOUCH ANYTHING ELSE!
 bool            DEBUG_OUTPUT=                           true;                       //Choose if computer should work in debug mode, printing logs on serial
@@ -32,15 +33,16 @@ float           desiredRoll=                            0;
 const int             gyroCalibrationSampleCount=       700;                        //Amount of samples taken for gyroscope calibration. 1000 is about 5-10 seconds of calibration
 const float           gyroMeasError=                    20.0f;  
 
-const float           pitchOffset=                      90.0f;                          //Offsets of rocket and IMU orientations in deg
+const float           pitchOffset=                      90.0f;                      //Offsets of rocket and IMU orientations in deg
 const float           yawOffset=                        0;
 const float           rollOffset=                       0;    
 
 //Barometer settings
-const int             altitudeAverageCnt=               10;                         //Number of measurments used in altitude averaging
+//SD settings
 
+const int packetFrameCount=                             50;                         //Amount of data frames packed into single packet written on SD       
 //State machine settings
-const float           launchDetectionTreshold=          1.2;                         //Launch trigger acceleration in g
+const float           launchDetectionTreshold=          1.2;                        //Launch trigger acceleration in g
 const int             pyroTriggerTime=                  100;                        //Pyro ON time in miliseconds
 const float           apogeeDetectionTreshold=          2;                          //Altitude difference in meters between max reading and actual reading able to trigger apogee detection
 const float           touchdownDetectionTreshold=       10;                         //Altitude at which controller assumes it landed
@@ -51,9 +53,12 @@ const float           railHeight=                       2;
 
 //Refresh rate settings
 int                   dataLoggingFREQ=                  2;                          //SD data logging frequency during ascent in HZ, on the ground 1/4 of that
-unsigned long         mainLoopFREQ=                     150;                         //Main logic loop frequency in HZ
+unsigned long         mainLoopFREQ=                     150;                        //Main logic loop frequency in HZ
 int                   buzzerFREQ=                       1;                          //frequency of buzzing during ground operation, 2 times thst after liftoff, 4 times that on apogee, 32 on error
 int                   debugFREQ=                        5; 
+int                   bmpFREQ=                          4;
+int                   imuFREQ=                          100;
+int                   ahrsFREQ=                         100;
 
 //Pid tuning parameters
 const float           kp=                               0.45;                      
@@ -71,7 +76,7 @@ const float           maxAngleZ=                        20;
 
 //Global
 StateMachine_state_t StateMachine_state;
-unsigned long prevTMain,lastUpdate,prevTLog,prevTBuzz;
+unsigned long prevTMain, lastUpdate, prevTLog, prevTBuzz, prevTBmp, prevTImu, prevTAhrs;
 unsigned long timestamp;
 
 String packet;
@@ -125,22 +130,38 @@ void setup(){
 
 void loop(){
     
-   
+    //Barometer readout loop - timing based on bmp refresh time set in bmp driver
+    if( (micros()-prevTBmp) >= (1000000./bmpFREQ) ){
+        prevTBmp = micros();
 
-    if( (micros()-prevTMain) >= (1000000./mainLoopFREQ) ){
-        prevTMain=micros();
-        
-        IMU_data = getRawReadings();
         BMP_data = getAltitude();
-        
+    }
 
-      
-        timestamp = micros(); //Get new microsecond timestamp for this loop
-        unsigned long deltaT = timestamp - lastUpdate; 
-        lastUpdate = timestamp;
+    //Imu readout loop - timing based on imu refresh time set in imu driver
+    if( (micros()-prevTImu) >= (1000000./imuFREQ) ){
+        prevTImu = micros();
+
+        IMU_data = getRawReadings();
+    }
+
+
+    //AHRS refresh loop - timing based on slowest sensor refresh time 
+    if( (micros()-prevTAhrs) >= (1000000./ahrsFREQ) ){
+
+        unsigned long deltaT = micros() - prevTAhrs; 
+        prevTAhrs = micros();
 
         AHRS_orientation = getPosition(StateMachine_state, deltaT, IMU_data);
-        Serial.println(deltaT/1000);
+    }
+
+
+
+    //Guidance and logic loop
+    if( (micros()-prevTMain) >= (1000000./mainLoopFREQ) ){
+        
+        unsigned long deltaT = micros() - prevTMain; 
+        prevTMain=micros();
+        
 
         //Guidance
         if(StateMachine_state == POWERED_ASCENT || StateMachine_state == COAST){
@@ -187,8 +208,9 @@ void loop(){
        
     }
 
-    
-    if( (micros()-prevTLog) >= (1000000./dataLoggingFREQ) && StateMachine_state != TOUCHDOWN){
+
+    //Telemetry loop
+    if( (micros()-prevTLog) >= (1000000./dataLoggingFREQ) && StateMachine_state != TOUCHDOWN ){
         prevTLog = micros();
 
         String frame;
@@ -199,12 +221,10 @@ void loop(){
         + String(AHRS_orientation.pitch) + String(",") + String(AHRS_orientation.yaw) + String(",") + String(AHRS_orientation.roll) + String(",")
         + String(Guidance_data.desiredPitch) + String(",") + String(Guidance_data.desiredYaw) + String(",") + String(Guidance_data.desiredRoll) + String("\n");
 
-
-
         packet += frame;
 
         logCounter++;
-        if(logCounter >=50){
+        if(logCounter >= packetFrameCount){
             SD_writeData(packet);
             packet = "";
             logCounter = 0;
@@ -212,7 +232,8 @@ void loop(){
        //Serial.println(frame);
     }
    
-    if( (micros()-prevTDebug) >= (1000000./debugFREQ)){
+    //Debug loop
+    if( (micros()-prevTDebug) >= (1000000./debugFREQ) ){
         prevTDebug = micros();
         //Serial.print(IMU_data.gx);Serial.print(" ");Serial.print(IMU_data.gy);Serial.print(" ");Serial.println(IMU_data.gz);
         //Serial.print(AHRS_orientation.pitch);Serial.print(" ");Serial.print(AHRS_orientation.yaw);Serial.print(" ");Serial.println(AHRS_orientation.roll);
