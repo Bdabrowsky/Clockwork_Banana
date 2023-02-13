@@ -53,12 +53,12 @@ const float           railHeight=                       2;
 
 //Refresh rate settings
 int                   dataLoggingFREQ=                  2;                          //SD data logging frequency during ascent in HZ, on the ground 1/4 of that
-unsigned long         mainLoopFREQ=                     150;                        //Main logic loop frequency in HZ
+unsigned long         mainLoopFREQ=                     60;                         //Main logic loop frequency in HZ
 int                   buzzerFREQ=                       1;                          //frequency of buzzing during ground operation, 2 times thst after liftoff, 4 times that on apogee, 32 on error
 int                   debugFREQ=                        5; 
-int                   bmpFREQ=                          4;
+int                   bmpFREQ=                          10;
 int                   imuFREQ=                          100;
-int                   ahrsFREQ=                         100;
+int                   ahrsFREQ=                         80;
 
 //Pid tuning parameters
 const float           kp=                               0.45;                      
