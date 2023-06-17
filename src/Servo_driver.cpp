@@ -17,17 +17,17 @@ void Servo_init(int S1Pin, int S2Pin, int S3Pin, int S4Pin){
     
 
     //Test sequence
-    S1.write(90);
-    S2.write(90);   
-    S3.write(90);
-    S4.write(90);  
+    S1.write(89);
+    S2.write(85);   
+    S3.write(89);
+    S4.write(85);  
 
 }
 
 
 void Servo_execute(float servoValueS1, float servoValueS2, float servoValueS3, float servoValueS4){
-    S1.write(servoValueS1);
-    S2.write(servoValueS2);   
-    S3.write(servoValueS3);
-    S4.write(servoValueS4);  
+    S1.write(servoValueS1-1);
+    S2.write(servoValueS2-5);   
+    S3.write(servoValueS3-1);
+    S4.write(servoValueS4-5);  
 }

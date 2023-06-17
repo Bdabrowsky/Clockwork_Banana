@@ -32,7 +32,7 @@ float           desiredRoll=                            0;
 const int             gyroCalibrationSampleCount=       700;                        //Amount of samples taken for gyroscope calibration. 1000 is about 5-10 seconds of calibration
 const float           gyroMeasError=                    20.0f;  
 
-const float           pitchOffset=                      90.0f;                          //Offsets of rocket and IMU orientations in deg
+const float           pitchOffset=                      90.0f;                           //Offsets of rocket and IMU orientations in deg
 const float           yawOffset=                        0;
 const float           rollOffset=                       0;    
 
@@ -45,7 +45,7 @@ const int             pyroTriggerTime=                  100;                    
 const float           apogeeDetectionTreshold=          2;                          //Altitude difference in meters between max reading and actual reading able to trigger apogee detection
 const float           touchdownDetectionTreshold=       10;                         //Altitude at which controller assumes it landed
 const float           freefallAccelerationTreshold=     1;                          //Acceleration at which computer assumse it's frefallling in m/s^2
-const unsigned long   stabilizationDelay=               1;                          //Delay between liftoff and stabilization start in seconds
+const unsigned long   stabilizationDelay=               0;                          //Delay between liftoff and stabilization start in seconds
 const float           maxAngle=                         60.0f;                      //Maximum angle before flight termination
 const float           railHeight=                       2;
 
@@ -56,13 +56,13 @@ int                   buzzerFREQ=                       1;                      
 int                   debugFREQ=                        5; 
 
 //Pid tuning parameters
-const float           kp=                               0.45;                      
-const float           ki=                               0.1;    
-const float           kd=                               0.22;   
+const float           kp=                               0.55;                      
+const float           ki=                               0.08;    
+const float           kd=                               0.28;   
 
-const float           maxAngleX=                        20;
-const float           maxAngleY=                        20;
-const float           maxAngleZ=                        20;
+const float           maxAngleX=                        30;
+const float           maxAngleY=                        30;
+const float           maxAngleZ=                        30;
 
 
 
@@ -95,19 +95,19 @@ void setup(){
     if(DEBUG_OUTPUT){
        
     }
-
+    delay(5000);
     if(!initBaro(DEBUG_OUTPUT) && StateMachine_state == INITIALIZING){
         StateMachine_state = CRITICAL_ERROR;
         Serial.println("BMP280 init failed!");
     }
 
-    if(!SD_init(SDPin, DEBUG_OUTPUT) && StateMachine_state == INITIALIZING){
+    /*if(!SD_init(SDPin, DEBUG_OUTPUT) && StateMachine_state == INITIALIZING){
         StateMachine_state = CRITICAL_ERROR;
         Serial.println("SD init failed!");
-    }
+    }*/
     
     initAHRS(pitchOffset,yawOffset,rollOffset,gyroMeasError);
-    PID_init(kp, ki, kd, maxAngleX, maxAngleY, maxAngleZ);
+    PID_init(kp, ki, kd, maxAngleX, maxAngleX, maxAngleX);
     Servo_init(S1Pin, S2Pin, S3Pin, S4Pin);
     initStateMachine(launchDetectionTreshold, freefallAccelerationTreshold, apogeeDetectionTreshold, touchdownDetectionTreshold, railHeight);
 
@@ -118,8 +118,9 @@ void setup(){
 
     if(StateMachine_state != CRITICAL_ERROR){
         StateMachine_state = GROUND_IDLE;
+        Serial.println("Init successful !");
     }
-    Serial.println("Init successful !");
+   
 }
 
 
@@ -140,18 +141,18 @@ void loop(){
         lastUpdate = timestamp;
 
         AHRS_orientation = getPosition(StateMachine_state, deltaT, IMU_data);
-        Serial.println(deltaT/1000);
+        //Serial.println(deltaT/1000);
 
         //Guidance
-        if(StateMachine_state == POWERED_ASCENT || StateMachine_state == COAST){
+    
             Guidance_data = PID_compute(AHRS_orientation, Guidance_data, deltaT);
 
-            Servo_execute(Guidance_data.servoValueX, Guidance_data.servoValueZ, 90, 90);
-        }
+            Servo_execute(Guidance_data.servoValueX, Guidance_data.servoValueZ, -1*Guidance_data.servoValueX +180, -1*Guidance_data.servoValueZ+180);
+        
 
         //State machine
         if(StateMachine_state == CRITICAL_ERROR){
-
+            //Serial.println("ERROR");
         }
         else if(StateMachine_state == NON_CRITICAL_ERROR){
         
@@ -182,7 +183,7 @@ void loop(){
             }
         }
         else if(StateMachine_state == TOUCHDOWN){
-            SD_close();
+            //SD_close();
         }
        
     }
@@ -205,7 +206,7 @@ void loop(){
 
         logCounter++;
         if(logCounter >=50){
-            SD_writeData(packet);
+            //SD_writeData(packet);
             packet = "";
             logCounter = 0;
         }
@@ -215,7 +216,7 @@ void loop(){
     if( (micros()-prevTDebug) >= (1000000./debugFREQ)){
         prevTDebug = micros();
         //Serial.print(IMU_data.gx);Serial.print(" ");Serial.print(IMU_data.gy);Serial.print(" ");Serial.println(IMU_data.gz);
-        //Serial.print(AHRS_orientation.pitch);Serial.print(" ");Serial.print(AHRS_orientation.yaw);Serial.print(" ");Serial.println(AHRS_orientation.roll);
+       //Serial.print(AHRS_orientation.pitch);Serial.print(" ");Serial.print(AHRS_orientation.yaw);Serial.print(" ");Serial.println(AHRS_orientation.roll);Serial.print(" ");Serial.print(Guidance_data.servoValueX);Serial.print(" ");Serial.println(Guidance_data.servoValueZ);
         //Serial.print(IMU_data.gx);Serial.print(" ");Serial.println(IMU_data.ax);
     }
 

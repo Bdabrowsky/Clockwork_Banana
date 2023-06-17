@@ -1,12 +1,12 @@
 #include "IMU.h"
-#include <Adafruit_LSM6DS33.h>
+#include <Adafruit_LSM6DS3.h>
 
 void calibrateGyro(int gyroCalibrationSampleCount);
 
 IMU_config_t IMU_config_d;
 IMU_data_t IMU_data_d;
 
-Adafruit_LSM6DS33 lsm6ds33;
+Adafruit_LSM6DS3 lsm6ds33;
 
 IMU_data_t getRawReadings()
 { 
@@ -74,10 +74,11 @@ void calibrateGyro(int gyroCalibrationSampleCount)
 
 bool initIMU(int gCSC, bool DEBUG_OUTPUT)
 {
-    if(!lsm6ds33.begin_I2C())
+  
+    if(!lsm6ds33.begin_I2C(0x6A))
     {
         if(DEBUG_OUTPUT)
-            Serial.println("Unable to initialize the LSM6DS1. Check your wiring!");
+            Serial.println("Unable to initialize the IMU. Check your wiring!");
         return false;
       
     }
