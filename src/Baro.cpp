@@ -19,7 +19,7 @@ BMP_data_t getAltitude()
         return BMP_data_d;
     }
 
-    float a=0.89f;
+    float a=0.1f;
 
     BMP_data_d.altitude = BMP_data_d.prevAltitude + a * (alt - BMP_data_d.prevAltitude);
 
@@ -34,7 +34,17 @@ BMP_data_t getAltitude()
 
 void barometerCalibration()
 {
-    BMP_config_d.groundPressure = bmp.readPressure();
+    float avg = 0.0f;
+
+    for(int i=0;i<100;i++){
+        avg += bmp.readPressure();
+        delay(10);
+    }
+
+    avg /= 100;
+
+
+    BMP_config_d.groundPressure = avg;
 }
 
 bool initBaro(bool DEBUG_OUTPUT)
@@ -55,7 +65,7 @@ bool initBaro(bool DEBUG_OUTPUT)
     Adafruit_BMP280::SAMPLING_X2,     /* Temp. oversampling */
     Adafruit_BMP280::SAMPLING_X8,    /* Pressure oversampling */
     Adafruit_BMP280::FILTER_X8,      /* Filtering. */
-    Adafruit_BMP280::STANDBY_MS_125); /* Standby time. */
+    Adafruit_BMP280::STANDBY_MS_1); /* Standby time. */
 
     return true;
 

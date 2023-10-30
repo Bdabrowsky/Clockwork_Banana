@@ -1,99 +1,42 @@
 #include "Pid_driver.h"
 
-PID_data_t PID_data_d;
-PID_config_t PID_config_d;
 
-
-//X - pitch 
-//Y - yaw
-float pidX_P, pidY_P, 
-pidX_I, pidY_I,
-pidX_D, pidY_D;
-
-float pidX, pidY;
-
-void PID_init(double kp, double ki, double kd, float maxAngleX, float maxAngleY, float maxAngleZ){
-    PID_config_d.Kp = kp;
-    PID_config_d.Ki = ki;
-    PID_config_d.Kd = kd;
-
-    PID_config_d.maxAngleX = maxAngleX;
-    PID_config_d.maxAngleX = maxAngleY;
-}
-
-
-
-Guidance_data_t PID_compute(AHRS_orientation_t ahrs, Guidance_data_t guidance, float timeStep){
-
-    Guidance_data_t result = guidance;
-
-    PID_data_d.previousErrorX = PID_data_d.errorX;
-    PID_data_d.previousErrorY = PID_data_d.errorY;
-    PID_data_d.previousErrorZ = PID_data_d.errorZ;
-
-
-    //Obtain error 
-    PID_data_d.errorX = ahrs.pitch - guidance.desiredPitch;
-    PID_data_d.errorY = ahrs.yaw - guidance.desiredYaw;
-
-    //Proportional part
-    pidX_P = PID_data_d.errorX * PID_config_d.Kp;
-    pidY_P = PID_data_d.errorY * PID_config_d.Kp;
-
-    //Integral part
-    PID_data_d.sumErrorX = PID_data_d.sumErrorX + PID_data_d.errorX * timeStep;
-    PID_data_d.sumErrorY = PID_data_d.sumErrorY + PID_data_d.errorY * timeStep;
-
-    pidX_I = PID_config_d.Ki * PID_data_d.sumErrorX;
-    pidY_I = PID_config_d.Ki * PID_data_d.sumErrorY;
+float pid::update(float value, float setpoint, float dT){
     
-    //Derivative part
-    pidX_D = PID_config_d.Kd * (PID_data_d.errorX - PID_data_d.previousErrorX) / timeStep;
-    pidY_D = PID_config_d.Kd * (PID_data_d.errorY - PID_data_d.previousErrorY) / timeStep;
+    //Calculate the error
+    float error = setpoint - value;
 
+    //Filter the error for derivative part
+    float errorFiltered = alpha * error + (1.0f - alpha) * previousErrorFiltered;
+    float derivative = (errorFiltered - previousErrorFiltered) / dT;
 
-    //Sum all p i d components
-    pidX = pidX_P + pidX_I + pidX_D;
-    pidY = pidY_P + pidY_I + pidY_D;
+    float newIntegral = integral + error * dT;
 
-
-    //Anti integral windup -> works only if P and D terma are less than saturation line
-    if(abs(pidX) > PID_config_d.maxAngleX){
-        if(abs(pidX_P + pidX_D) <= PID_config_d.maxAngleX){
-            float diff = PID_config_d.maxAngleX - abs(pidX_P + pidX_D);
-
-            if(pidX > 0){
-                pidX -= diff;   //angle positive -> subtract winded up integral part to jus hit saturation line
-            }
-            else{
-                 pidX += diff;  //angle positive -> add winded up integral part to jus hit saturation line
-            }
-        }
-    }
-
-
+    float output = kp * error + ki * integral + kd * derivative;
 
 
     //Saturation filter
-    if(pidX > PID_config_d.maxAngleX){
-        pidX = PID_config_d.maxAngleX;
+    if(output > maxOutput){
+        output = maxOutput;
     }
-
-    if(pidX < (-1) * PID_config_d.maxAngleX){
-        pidX = (-1) * PID_config_d.maxAngleX;
+    else if(output < minOutput){
+        output = minOutput;
     }
-
-    if(pidY > PID_config_d.maxAngleY){
-        pidY = PID_config_d.maxAngleY;
+    else{
+        //Anti windup
+        integral = newIntegral;
     }
+   
+    return output; 
+}
 
-    if(pidY > (-1) * PID_config_d.maxAngleY){
-        pidY = (-1) * PID_config_d.maxAngleY;
-    }
+float pid::init(float kpI, float kiI, float kdI, float alphaI, float maxOutputI, float minOutputI){
+    kp = kpI;
+    ki = kiI;
+    kd = kdI;
 
+    alpha = alphaI;
+    maxOutput = maxOutputI;
+    minOutput = minOutputI;
 
-    result.servoValueX = pidX;
-    result.servoValueY = pidY;
-
-    return result;
 }

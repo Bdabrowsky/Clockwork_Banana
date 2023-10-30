@@ -65,9 +65,8 @@ const float           kp=                               0.45;
 const float           ki=                               0.1;    
 const float           kd=                               0.22;   
 
-const float           maxAngleX=                        20;
-const float           maxAngleY=                        20;
-const float           maxAngleZ=                        20;
+const float           maxAngleY=                        20;                         //Pitch
+const float           maxAngleZ=                        20;                         //Yaw
 
 
 
@@ -90,6 +89,8 @@ AHRS_orientation_t AHRS_orientation;
 BMP_data_t BMP_data;
 IMU_data_t IMU_data;
 
+pid pidY;
+pid pidZ;
 
 void setup(){
     pinMode(buzzerPin, OUTPUT);
@@ -112,7 +113,10 @@ void setup(){
     }
     
     initAHRS(pitchOffset,yawOffset,rollOffset,gyroMeasError);
-    PID_init(kp, ki, kd, maxAngleX, maxAngleY, maxAngleZ);
+
+    pidY.init(kp, ki, kd, 0.8f, maxAngleY, (-1.0f)*maxAngleY);
+    pidZ.init(kp, ki, kd, 0.8f, maxAngleZ, (-1.0f)*maxAngleZ);
+
     Servo_init(S1Pin, S2Pin, S3Pin, S4Pin);
     initStateMachine(launchDetectionTreshold, freefallAccelerationTreshold, apogeeDetectionTreshold, touchdownDetectionTreshold, railHeight);
 
@@ -157,17 +161,18 @@ void loop(){
 
 
     //Guidance and logic loop
-    if( (micros()-prevTMain) >= (1000000./mainLoopFREQ) ){
+    if( (micros()-prevTMain) >= (1000000.0/mainLoopFREQ) ){
         
         unsigned long deltaT = micros() - prevTMain; 
         prevTMain=micros();
         
 
         //Guidance
-        if(StateMachine_state == POWERED_ASCENT || StateMachine_state == COAST){
-            Guidance_data = PID_compute(AHRS_orientation, Guidance_data, deltaT);
+        if(StateMachine_state == POWERED_ASCENT || StateMachine_state == COAST || StateMachine_state == GROUND_IDLE){
+            float valY = pidY.update(AHRS_orientation.pitch, Guidance_data.desiredPitch, deltaT / 1000000.0f);
+            float valZ = pidZ.update(AHRS_orientation.yaw, Guidance_data.desiredYaw, deltaT / 1000000.0f);
 
-            Servo_execute(Guidance_data.servoValueX, Guidance_data.servoValueZ, 90, 90);
+            Servo_execute(valY, valZ, (-1.0f)*valY, (-1.0f)*valZ);
         }
 
         //State machine

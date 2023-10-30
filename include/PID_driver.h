@@ -8,38 +8,24 @@
 #include "Guidance_driver.h"
 
 
-typedef struct {
-    float maxAngleX;
-    float maxAngleY;
-    float maxAngleZ;
+class pid{
+    public:
+        float kp;
+        float ki;
+        float kd;
 
-    float Kp;
-    float Ki;
-    float Kd;
-} PID_config_t;
+        float previousErrorFiltered;
+        float integral;
+        float alpha;
 
-typedef struct {
-    float previousErrorX;
-    float previousErrorY;
-    float previousErrorZ;
-
-    float sumErrorX;
-    float sumErrorY;
-    float sumErrorZ;
-
-    float errorX;
-    float errorY;
-    float errorZ;
-
-    
-    
-} PID_data_t;
+        float maxOutput;
+        float minOutput;
 
 
+        float update(float value, float setpoint, float dT);
+        float init(float kpI, float kiI, float kdI, float alphaI, float maxOutputI, float minOutputI);
 
-void PID_init(double kp, double ki, double kd, float maxAngleX, float maxAngleY, float maxAngleZ);
-Guidance_data_t PID_compute(AHRS_orientation_t ahrs, Guidance_data_t guidance, float timeStep);
-
+};
 
 
 
