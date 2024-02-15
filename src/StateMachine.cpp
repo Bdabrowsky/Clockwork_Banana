@@ -3,6 +3,7 @@
  
 StateMachine_data_t StateMachine_data_d;
 
+int cnt = 0;
 
 void initStateMachine(float launchDetectionTreshold, float freefallAccelerationTreshold, float apogeeDetectionTreshold, float touchdownDetectionTreshold, float railHeight)
 {
@@ -46,8 +47,33 @@ bool apogeeDetection(StateMachine_state_t state, IMU_data_t imu, BMP_data_t baro
   if(state != COAST){
     return false;
   }
-
+  /*
   if( (baro.altitude + StateMachine_data_d.aDT <= baro.maxAltitude) && (baro.altitude > StateMachine_data_d.rH) ){
+    return true;
+  }
+  */
+ //Serial.print(baro.altitude);Serial.print(" ");Serial.println(baro.prevAltitude);
+ 
+  /*if(floor(10.0*baro.altitude)/10.0 < floor(10.0*baro.prevAltitude)/10.0 ){
+    cnt++;
+  }
+  else{
+    cnt = 0;
+  }
+  //Serial.println(cnt);
+  if(cnt == 100){
+    return true;
+  }
+  */
+  Serial.println(baro.pressure);
+  if(baro.pressure > baro.prevPressure){
+    cnt++;
+  }
+  else{
+    cnt = 0;
+  }
+  //Serial.println(cnt);
+  if(cnt == 100){
     return true;
   }
 

@@ -7,7 +7,8 @@ typedef struct{
 } BMP_config_t;
 
 typedef struct{
-    int pressure;
+    float pressure;
+    float prevPressure;
     float temperature;
     float altitude;
     float prevAltitude;
